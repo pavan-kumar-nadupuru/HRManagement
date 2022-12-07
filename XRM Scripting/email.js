@@ -18,7 +18,8 @@ HRMGMT.JScripts.Email = {
         EyeCheckRequired: "hrmgmt_eyecheckrequired",
         APPROVER_EMAIL: "hrmgmt_approvalemail",
         SUBJECT: "subject",
-        DESCRIPTION: "description"
+        DESCRIPTION: "description",
+        APPROVAL_ID: "hrmgmt_approvalid"
     },
 
     onload: function (executionContext) {
@@ -133,7 +134,7 @@ HRMGMT.JScripts.Email = {
 
     makeFormReadOnly: function (formContext) {
         // Make form read-only
-        formContext.ui.controls.forEach(function (control, index) {
+        formContext.ui.controls.forEach(function (control) {
             // DO NOT disable the approval status field
             // if (control.getName() !== HRMGMT.JScripts.Email.constants.APPROVAL_STATUS) {
             control.setDisabled(true);
@@ -146,6 +147,14 @@ HRMGMT.JScripts.Email = {
 
         // Send email to approver
         var approverEmail = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVER_EMAIL).getValue();
+        var approvalId = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_ID).getValue();
+
+        if(approvalId && approvalId != "NA"){
+            Xrm.Navigation.openAlertDialog({
+                text: "Email has already been sent for approval!"
+            });
+            return;
+        }
         if (approverEmail) {
             // Make approval status waiting
             formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS).setValue(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS_CODES.Waiting);
@@ -156,12 +165,13 @@ HRMGMT.JScripts.Email = {
             var data = {
                 "email": approverEmail,
                 "recalled": "no",
+                "recallId": approvalId || "",
                 "id": formContext.data.entity.getId().replace("{", "").replace("}", ""),
                 "subject": subject || "Approval request",
                 "description": description || "Please take a look at this email and approve or cancel it as you see fit."
             };
             var request = new XMLHttpRequest();
-            request.open("POST", "https://prod-77.westus.logic.azure.com:443/workflows/232a4bb50f484ba4b6ae50ca9dd02e6b/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=bG8UbBEIMwhzYhK_dZt2x5wkI9yM8XJAFaas_wXXLs0", true);
+            request.open("POST", "https://prod-62.westus.logic.azure.com:443/workflows/0dbe9376928b416c82f0c1d216095350/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=9GFlmkNBvh1Yi7Uwg-rU5NQX15U0Tv1458X0WO8RGsQ", true);
             request.setRequestHeader("Content-Type", "application/json");
             request.onreadystatechange = function () {
                 if (request.readyState === 4 && request.status === 200) {
@@ -187,22 +197,30 @@ HRMGMT.JScripts.Email = {
 
         // Send email to approver
         var approverEmail = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVER_EMAIL).getValue();
+        var approvalId = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_ID).getValue();
+        if(!approvalId || approvalId == "NA"){
+            Xrm.Navigation.openAlertDialog({
+                text: "Email has not been sent for approval. Please send for approval before recalling."
+            });
+            return;
+        }
+
         if (approverEmail) {
             // Make approval status blank
             formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS).setValue(null);
 
             // Make a POST call to https://prod-146.westus.logic.azure.com:443/workflows/c19b3c30081044d7a3114eee2de488b3/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2WPJj4ENgzgTNAEH34ny8BCCQu_OYpxfCvcMvRYLM3g with required data
             var subject = formContext.getAttribute(HRMGMT.JScripts.Email.constants.SUBJECT).getValue();
-            var description = formContext.getAttribute(HRMGMT.JScripts.Email.constants.DESCRIPTION).getValue();
             var data = {
                 "email": approverEmail,
                 "recalled": "yes",
+                "recallId": approvalId,
                 "id": formContext.data.entity.getId().replace("{", "").replace("}", ""),
                 "subject": subject + " - Recalled" || "Approval request - Recalled",
                 "description": "Please ignore the previous email. This email is to inform you that the request has been recalled. Sorry for the inconvenience."
             };
             var request = new XMLHttpRequest();
-            request.open("POST", "https://prod-77.westus.logic.azure.com:443/workflows/232a4bb50f484ba4b6ae50ca9dd02e6b/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=bG8UbBEIMwhzYhK_dZt2x5wkI9yM8XJAFaas_wXXLs0", true);
+            request.open("POST", "https://prod-62.westus.logic.azure.com:443/workflows/0dbe9376928b416c82f0c1d216095350/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=9GFlmkNBvh1Yi7Uwg-rU5NQX15U0Tv1458X0WO8RGsQ", true);
             request.setRequestHeader("Content-Type", "application/json");
             request.onreadystatechange = function () {
                 if (request.readyState === 4 && request.status === 200) {
