@@ -149,7 +149,7 @@ HRMGMT.JScripts.Email = {
         var approverEmail = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVER_EMAIL).getValue();
         var approvalId = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_ID).getValue();
 
-        if(approvalId && approvalId != "NA"){
+        if (approvalId && approvalId != "NA") {
             Xrm.Navigation.openAlertDialog({
                 text: "Email has already been sent for approval!"
             });
@@ -158,6 +158,8 @@ HRMGMT.JScripts.Email = {
         if (approverEmail) {
             // Make approval status waiting
             formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS).setValue(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS_CODES.Waiting);
+            // Save the form
+            formContext.data.entity.save();
 
             // Make a POST call to https://prod-146.westus.logic.azure.com:443/workflows/c19b3c30081044d7a3114eee2de488b3/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2WPJj4ENgzgTNAEH34ny8BCCQu_OYpxfCvcMvRYLM3g with required data
             var subject = formContext.getAttribute(HRMGMT.JScripts.Email.constants.SUBJECT).getValue();
@@ -170,35 +172,59 @@ HRMGMT.JScripts.Email = {
                 "subject": subject || "Approval request",
                 "description": description || "Please take a look at this email and approve or cancel it as you see fit."
             };
-            var request = new XMLHttpRequest();
-            request.open("POST", "https://prod-62.westus.logic.azure.com:443/workflows/0dbe9376928b416c82f0c1d216095350/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=9GFlmkNBvh1Yi7Uwg-rU5NQX15U0Tv1458X0WO8RGsQ", true);
-            request.setRequestHeader("Content-Type", "application/json");
-            request.onreadystatechange = function () {
-                if (request.readyState === 4 && request.status === 200) {
-                    var json = JSON.parse(request.responseText);
-                    console.log(json);
-                }
-            };
-            request.send(JSON.stringify(data));
+            Xrm.WebApi.retrieveMultipleRecords("environmentvariabledefinition", `?$filter=schemaname eq 'hrmgmt_Flowurl'&$select=defaultvalue&$expand=environmentvariabledefinition_environmentvariablevalue($select=value)`).then(
+                function success(result) {
+                    if (result.entities.length > 0) {
+                        var request = new XMLHttpRequest();
+                        request.open("POST", result.entities[0].environmentvariabledefinition_environmentvariablevalue
+                        [0].value, true);
+                        request.setRequestHeader("Content-Type", "application/json");
+                        request.onreadystatechange = function () {
+                            if (request.readyState === 4 && request.status === 200) {
+                                var json = JSON.parse(request.responseText);
+                                console.log(json);
+                            }
+                        };
+                        request.send(JSON.stringify(data));
 
-            HRMGMT.JScripts.Email.approvalStatusOnChange(null, formContext);
-        }
-        else {
-            Xrm.Navigation.openAlertDialog({
-                text: "Approver email is required."
-            });
-            return;
+                        HRMGMT.JScripts.Email.approvalStatusOnChange(null, formContext);
+                    } else {
+                        Xrm.Navigation.openAlertDialog({
+                            text: "Approver email is required."
+                        });
+                        return;
+                    }
+                    // Reload page after 10 seconds
+                    setTimeout(function () {
+                        formContext.data.refresh(true);
+                    }, 10000);
+                },
+                function (error) {
+                    Xrm.Navigation.openAlertDialog({
+                        text: error.message
+                    });
+                    return;
+                }
+            );
         }
     },
     recallClick: function (formContext) {
         console.log("Button clicked : recallClick");
+        var approvalStatus = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS).getValue();
+        if (approvalStatus === HRMGMT.JScripts.Email.constants.APPROVAL_STATUS_CODES.Approved || approvalStatus === HRMGMT.JScripts.Email.constants.APPROVAL_STATUS_CODES.Rejected) {
+            Xrm.Navigation.openAlertDialog({
+                text: "Email has already been approved or rejected. You cannot recall it."
+            });
+            return;
+        }
+
         // Set “Approval Status” as ‘Blank’
         formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_STATUS).setValue(null);
 
         // Send email to approver
         var approverEmail = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVER_EMAIL).getValue();
         var approvalId = formContext.getAttribute(HRMGMT.JScripts.Email.constants.APPROVAL_ID).getValue();
-        if(!approvalId || approvalId == "NA"){
+        if (!approvalId || approvalId == "NA") {
             Xrm.Navigation.openAlertDialog({
                 text: "Email has not been sent for approval. Please send for approval before recalling."
             });
@@ -219,18 +245,33 @@ HRMGMT.JScripts.Email = {
                 "subject": subject + " - Recalled" || "Approval request - Recalled",
                 "description": "Please ignore the previous email. This email is to inform you that the request has been recalled. Sorry for the inconvenience."
             };
-            var request = new XMLHttpRequest();
-            request.open("POST", "https://prod-62.westus.logic.azure.com:443/workflows/0dbe9376928b416c82f0c1d216095350/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=9GFlmkNBvh1Yi7Uwg-rU5NQX15U0Tv1458X0WO8RGsQ", true);
-            request.setRequestHeader("Content-Type", "application/json");
-            request.onreadystatechange = function () {
-                if (request.readyState === 4 && request.status === 200) {
-                    var json = JSON.parse(request.responseText);
-                    console.log(json);
-                }
-            };
-            request.send(JSON.stringify(data));
+            Xrm.WebApi.retrieveMultipleRecords("environmentvariabledefinition", `?$filter=schemaname eq 'hrmgmt_Flowurl'&$select=defaultvalue&$expand=environmentvariabledefinition_environmentvariablevalue($select=value)`).then(
+                function success(result) {
+                    var request = new XMLHttpRequest();
+                    request.open("POST", result.entities[0].environmentvariabledefinition_environmentvariablevalue
+                    [0].value, true);
+                    request.setRequestHeader("Content-Type", "application/json");
+                    request.onreadystatechange = function () {
+                        if (request.readyState === 4 && request.status === 200) {
+                            var json = JSON.parse(request.responseText);
+                            console.log(json);
+                        }
+                    };
+                    request.send(JSON.stringify(data));
 
-            HRMGMT.JScripts.Email.approvalStatusOnChange(null, formContext);
+                    HRMGMT.JScripts.Email.approvalStatusOnChange(null, formContext);
+                    formContext.data.entity.save();
+                    setTimeout(function () {
+                        formContext.data.refresh(true);
+                    }, 10000);
+                },
+                function (error) {
+                    Xrm.Navigation.openAlertDialog({
+                        text: error.message
+                    });
+                    return;
+                }
+            );
         }
         else {
             Xrm.Navigation.openAlertDialog({
@@ -238,17 +279,12 @@ HRMGMT.JScripts.Email = {
             });
             return;
         }
-
-
-
-
-        HRMGMT.JScripts.Email.approvalStatusOnChange(null, formContext);
-
     },
     optInApprovalClick: function (formContext) {
         console.log("Button clicked : optInApprovalClick");
         // Make eye check required field yes
         formContext.getAttribute(HRMGMT.JScripts.Email.constants.EyeCheckRequired).setValue(true);
+        formContext.data.entity.save();
         // Refresh the form
         HRMGMT.JScripts.Email.eyeCheckRequiredOnChange(null, formContext);
     }
